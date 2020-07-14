@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -eux
+
 test_tag=$(git show -s --format=%%B | sed -ne "/^Test-tag%s:/s/^.*: *//p")
 if [ -z "$test_tag" ]; then
     # shellcheck disable=SC2153
