@@ -533,6 +533,34 @@ get_map_test(void **state)
 	assert_int_equal(1, result.dcr_nr);
 }
 
+static void
+chunk_rounding(void **state)
+{
+	assert_int_equal(0, csum_round_down_to_chunk(0, 8, true));
+	assert_int_equal(0, csum_round_down_to_chunk(1, 8, true));
+	assert_int_equal(0, csum_round_down_to_chunk(7, 8, true));
+	assert_int_equal(8, csum_round_down_to_chunk(8, 8, true));
+	assert_int_equal(8, csum_round_down_to_chunk(9, 8, true));
+
+	assert_int_equal(0, csum_round_down_to_chunk(0, 3, false));
+	assert_int_equal(0, csum_round_down_to_chunk(1, 3, false));
+	assert_int_equal(0, csum_round_down_to_chunk(2, 3, false));
+	assert_int_equal(3, csum_round_down_to_chunk(3, 3, false));
+	assert_int_equal(3, csum_round_down_to_chunk(4, 3, false));
+
+	assert_int_equal(0, csum_round_up_to_chunk(0, 8, true));
+	assert_int_equal(8, csum_round_up_to_chunk(1, 8, true));
+	assert_int_equal(8, csum_round_up_to_chunk(7, 8, true));
+	assert_int_equal(8, csum_round_up_to_chunk(8, 8, true));
+	assert_int_equal(16, csum_round_up_to_chunk(9, 8, true));
+
+	assert_int_equal(0, csum_round_up_to_chunk(0, 3, false));
+	assert_int_equal(3, csum_round_up_to_chunk(1, 3, false));
+	assert_int_equal(3, csum_round_up_to_chunk(2, 3, false));
+	assert_int_equal(3, csum_round_up_to_chunk(3, 3, false));
+	assert_int_equal(6, csum_round_up_to_chunk(4, 3, false));
+}
+
 #define MAP_MAX 10
 #define	HOLES_TESTCASE(...) \
 	holes_test_case(&(struct holes_test_args)__VA_ARGS__)
@@ -1786,6 +1814,7 @@ static const struct CMUnitTest tests[] = {
 	     test_formatter),
 	TEST("CSUM28: Get the recxes from a map", get_map_test),
 	TEST("CSUM29: csum_info serialization", test_ci_serialize),
+	TEST("CSUM30: Chunk rounding tests", chunk_rounding),
 	TEST("CSUM_HOLES01: With 2 mapped extents that leave a hole "
 	     "at the beginning, in between and "
 	     "at the end, all within a single chunk.", holes_1),

@@ -53,7 +53,7 @@ daos_checksum_test_arg2type(char *str)
 
 /** by default for replica object test */
 static daos_oclass_id_t dts_csum_oc = OC_SX;
-static uint32_t dts_csum_prop_type = DAOS_PROP_CO_CSUM_SHA512;
+static uint32_t dts_csum_prop_type = DAOS_PROP_CO_CSUM_CRC16;
 
 /** enable EC obj csum test or replica obj csum test */
 static inline int
@@ -1939,6 +1939,255 @@ test_enumerate_object_csum_buf_too_small(void **state)
 }
 
 static int
+timebox(int (*cb)(void *), void *arg, uint64_t *nsec, struct timespec *t)
+{
+	struct timespec	start, end;
+	int		rc;
+
+	d_gettime(&start);
+	rc = cb(arg);
+	d_gettime(&end);
+
+	if (nsec)
+		*nsec =  d_timediff_ns(&start, &end);
+
+	if (t)
+		*t = d_timediff(start, end);
+
+	return rc;
+}
+
+static void
+nsec_hr(double nsec, char *buf)
+{
+	int i = 0;
+	char* units[] = {"nsec", "usec", "sec", "min", "hr"};
+	uint32_t divisor[] = {
+		1e3 /** nsec->usec */,
+		1e6 /** usec->sec */,
+		60 /** sec->min */,
+		60 /** min->hr */};
+
+	while (nsec >= divisor[i]) {
+		nsec /= divisor[i];
+		i++;
+	}
+	sprintf(buf, "%.*f %s", i, nsec, units[i]);
+}
+
+int update_cb(void *arg)
+{
+	struct csum_test_ctx *ctx = arg;
+
+	return daos_obj_update(ctx->oh, DAOS_TX_NONE, 0, &ctx->dkey, 1,
+			       &ctx->update_iod, &ctx->update_sgl,
+			       NULL);
+}
+
+int fetch_cb(void *arg)
+{
+	struct csum_test_ctx *ctx = arg;
+
+	return daos_obj_fetch(ctx->oh, DAOS_TX_NONE, 0, &ctx->dkey, 1,
+			    &ctx->fetch_iod, &ctx->fetch_sgl, NULL, NULL);
+}
+
+/**
+ * For Array Types
+ * Using the provided configuration (\args) time an object update
+ */
+struct performance_test_args {
+	uint32_t		 csum_prop_type;
+	bool			 server_verify;
+	size_t			 chunksize;
+	size_t			 data_size;
+};
+
+
+struct timed_results {
+	uint64_t update_usec;
+	uint64_t fetch_usec;
+};
+
+static struct timed_results
+time_update_fetch(test_arg_t *test_arg, struct performance_test_args *args,
+		  bool verbose)
+{
+	struct csum_test_ctx	ctx = {0};
+	daos_oclass_id_t	oc = OC_SX;
+	size_t			data_size = args->data_size;
+	struct timed_results	result = {0};
+	int			rc;
+
+	d_iov_set(&ctx.dkey, "dkey", strlen("dkey"));
+	d_iov_set(&ctx.update_iod.iod_name, "akey", strlen("akey"));
+
+	/** setup the buffers for update & fetch */
+	d_sgl_init(&ctx.update_sgl, 1);
+	iov_alloc(&ctx.update_sgl.sg_iovs[0], data_size);
+	assert_non_null(&ctx.update_sgl.sg_iovs[0]);
+
+	d_sgl_init(&ctx.fetch_sgl, 1);
+	iov_alloc(&ctx.fetch_sgl.sg_iovs[0], data_size);
+	assert_non_null(&ctx.fetch_sgl.sg_iovs[0]);
+
+	/** Setup Update IOD */
+	ctx.recx[0].rx_idx = 0;
+	ctx.recx[0].rx_nr = data_size;
+	ctx.update_iod.iod_size = 1;
+	ctx.update_iod.iod_nr	= 1;
+	ctx.update_iod.iod_recxs = ctx.recx;
+	ctx.update_iod.iod_type  = DAOS_IOD_ARRAY;
+
+	/** Setup Fetch IOD*/
+	ctx.fetch_iod.iod_name = ctx.update_iod.iod_name;
+	ctx.fetch_iod.iod_size = ctx.update_iod.iod_size;
+	ctx.fetch_iod.iod_recxs = ctx.update_iod.iod_recxs;
+	ctx.fetch_iod.iod_nr = ctx.update_iod.iod_nr;
+	ctx.fetch_iod.iod_type = ctx.update_iod.iod_type;
+
+	setup_from_test_args(&ctx, test_arg);
+	setup_cont_obj(&ctx, args->csum_prop_type, args->server_verify,
+		       args->chunksize, oc);
+
+	iov_update_fill(&ctx.update_sgl.sg_iovs[0], "ABC", data_size);
+
+	char buf[1024] = {0};
+	uint64_t update_nsec = 0;
+	uint64_t fetch_nsec = 0;
+	struct timespec update_time = {0};
+	struct timespec fetch_time = {0};
+
+	rc = timebox(update_cb, &ctx, &update_nsec, &update_time);
+	assert_success(rc);
+	nsec_hr(update_nsec, buf);
+	if (verbose)
+		print_message("Update took %s \n", buf);
+
+	rc = timebox(fetch_cb, &ctx, &fetch_nsec, &fetch_time);
+	nsec_hr(fetch_nsec, buf);
+	if (verbose)
+		print_message("Fetch took %s \n", buf);
+	assert_success(rc);
+
+	/** Clean up */
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
+
+	result.update_usec = d_time2us(update_time);
+	result.fetch_usec = d_time2us(fetch_time);
+
+	return result;
+}
+
+static int
+compute_average(int a, int b)
+{
+	return (a / 2) + (b / 2) + ((a % 2 + b % 2) / 2);
+}
+
+static uint64_t
+avg(uint64_t array[], uint32_t nr)
+{
+	int i;
+	uint64_t result = 0
+		;
+	for (i = 0; i < nr; i++) {
+		assert_true(result + array[i] > result); /** avoid overflow */
+		result += array[i];
+	}
+
+	return result / nr;
+}
+
+static struct timed_results
+avg_perf_result(struct timed_results array[], uint32_t nr)
+{
+	int i;
+	struct timed_results result = {0};
+
+	for (i = 0; i < nr; i++) {
+		/** avoid overflow */
+		assert_true(result.update_usec + array[i].update_usec > result.update_usec);
+		assert_true(result.fetch_usec + array[i].fetch_usec > result.fetch_usec);
+		result.update_usec += array[i].update_usec;
+		result.fetch_usec += array[i].fetch_usec;
+	}
+
+	result.update_usec /= nr;
+	result.fetch_usec /= nr;
+
+	return result;
+}
+
+static uint64_t
+delta_perc(uint64_t a, uint64_t b)
+{
+	if (b > a)
+		return 0;
+	return ((a - b) * 100) / a;
+}
+
+static void
+performance_check(void **state)
+{
+	/* [now-ryon]: Performance improvements
+	 *   - average several runs of update/fetch (through out outliers). Then compare average of with csum and w/o csum. Write test to not let with csum be greather than 10% slower
+	 *   - will have to profile daos_io_server (then client, but server probably most)
+	 *   - try to use a profiler (compile with -pg, http://web.archive.org/web/20141129061523/http://www.cs.utah.edu/dept/old/texinfo/as/gprof.html#SEC2)
+	 *   - if profiler is too difficult or not helpful, instrument checksum code
+	 *   	- call count, time spent in each. focus on server code
+	 *   -
+	 */
+#define SAMPLE_NR 10
+	struct timed_results samples[SAMPLE_NR] = {0};
+	uint32_t i;
+//	dc_mgmt_profile("/tmp/profile/", 50, true);
+
+	struct performance_test_args test_args =
+		{
+			.data_size =  1024 * 1024,
+			.chunksize = 1024,
+			.server_verify = false,
+			.csum_prop_type = DAOS_PROP_CO_CSUM_OFF
+		};
+
+	for (i = 0; i < SAMPLE_NR; ++i) {
+		samples[i] = time_update_fetch(*state, &test_args, 0);
+	}
+	struct timed_results avg = avg_perf_result(samples, SAMPLE_NR);
+	print_message("Averages w/o checksum\n\tUpdate: %lu\n\tFetch: %lu\n",
+		      avg.update_usec, avg.fetch_usec);
+
+	test_args.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64;
+	test_args.server_verify = true;
+	for (i = 0; i < SAMPLE_NR; ++i) {
+		samples[i] = time_update_fetch(*state, &test_args, 0);
+	}
+
+	struct timed_results csum_avg = avg_perf_result(samples, SAMPLE_NR);
+	print_message("Averages w/ checksum\n\tUpdate: %lu\n\tFetch: %lu\n",
+		      csum_avg.update_usec, csum_avg.fetch_usec);
+
+	print_message("Update Performance Impact: %lu\n",
+		      delta_perc(csum_avg.update_usec, avg.update_usec));
+
+	uint64_t fetch_percent_increase = delta_perc(csum_avg.fetch_usec,
+						     avg.fetch_usec);
+	uint64_t fetch_delta = csum_avg.fetch_usec - avg.fetch_usec;
+
+	print_message("Fetch Performance Impact: %lu\n",
+		      fetch_percent_increase);
+
+//	dc_mgmt_profile("/tmp/profile/", 50, false);
+
+	if (fetch_percent_increase > 10) {
+		fail_msg("Fetch impact (%lu%%) greater than 10%% (%lu)",
+			fetch_percent_increase, fetch_delta);
+	}
+}
+
+static int
 setup(void **state)
 {
 	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
@@ -2006,6 +2255,7 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM_REBUILD05: SV, Data not inlined, not bulk",
 		  rebuild_5),
 	CSUM_TEST("DAOS_CSUM_REBUILD06: SV, Data bulk transfer", rebuild_6),
+	CSUM_TEST("DAOS_CSUM_PERF01: Basic", performance_check),
 
 	EC_CSUM_TEST("DAOS_EC_CSUM00: csum disabled", checksum_disabled),
 	EC_CSUM_TEST("DAOS_EC_CSUM01: simple update with server side verify",

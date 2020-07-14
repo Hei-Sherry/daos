@@ -35,7 +35,7 @@
 #include <daos/checksum.h>
 
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
-#define C_TRACE_ENABLED() D_LOG_ENABLED(DB_TRACE)
+#define C_TRACE_ENABLED()true
 
 /** File function signatures */
 static int
@@ -1419,7 +1419,10 @@ ci_insert(struct dcs_csum_info *dcb, int idx, uint8_t *csum_buf, size_t len)
 {
 	uint8_t *to_update;
 
-	D_ASSERT(idx < dcb->cs_nr);
+	D_ASSERTF(idx < dcb->cs_nr, "idx(%d) < dcb->cs_nr(%d)",
+		  idx, dcb->cs_nr);
+	/* [todo-ryon]: add comment here too */
+	D_ASSERT(len <= dcb->cs_buf_len - idx * dcb->cs_len);
 
 	to_update = dcb->cs_csum + idx * dcb->cs_len;
 	memcpy(to_update, csum_buf, len);
@@ -1546,6 +1549,36 @@ csum_chunk_align_ceiling(daos_off_t off, size_t chunksize)
 	if (hi < lo) /** overflow */
 		hi = UINT64_MAX;
 	return hi;
+}
+
+daos_size_t
+csum_round_down_to_chunk(daos_size_t n, daos_size_t chunksize, bool power_of_two)
+{
+	if (n == 0)
+		return 0;
+	if (power_of_two) {
+		return (n & -chunksize);
+	} else {
+		daos_size_t r = n % chunksize;
+		if (r == 0)
+			return n;
+		return n - r;
+	}
+}
+daos_size_t
+csum_round_up_to_chunk(daos_size_t n, daos_size_t chunksize, bool power_of_two)
+{
+	if (n == 0)
+		return 0;
+
+	if (power_of_two) {
+		return ((n - 1) & -chunksize) + chunksize;
+	} else {
+		daos_size_t r = n % chunksize;
+		if (r == 0)
+			return n;
+		return n + chunksize - r;
+	}
 }
 
 daos_off_t

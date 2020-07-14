@@ -56,7 +56,7 @@ const (
 	// DataPlaneName defines a consistent name for the ioserver.
 	DataPlaneName = "DAOS I/O Server"
 	// define supported maximum number of I/O servers
-	maxIOServers = 2
+	maxIOServers = 4
 
 	iommuPath        = "/sys/class/iommu"
 	minHugePageCount = 128

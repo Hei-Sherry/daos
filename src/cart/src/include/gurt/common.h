@@ -484,6 +484,19 @@ d_timeleft_ns(const struct timespec *expiration)
 	return ns;
 }
 
+static inline struct timespec
+d_time_elapsed(const struct timespec start)
+{
+	struct timespec		now;
+	struct timespec		elapsed;
+
+	d_gettime(&now);
+
+	elapsed = d_timediff(start, now);
+
+	return elapsed;
+}
+
 /* calculate the number in us after \param sec_diff second */
 static inline uint64_t
 d_timeus_secdiff(unsigned int sec_diff)
