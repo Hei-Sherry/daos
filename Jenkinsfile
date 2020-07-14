@@ -200,7 +200,7 @@ pipeline {
                              script: 'rpmspec -q --srpm --requires' +
                                      ' utils/rpms/daos.spec 2>/dev/null',
                              returnStdout: true
-        TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'false')
+        TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
     }
 
     options {
