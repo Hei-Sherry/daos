@@ -893,7 +893,7 @@ pipeline {
                       expression { ! skip_stage('run_test') }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'stage_vm1'
                     }
                     steps {
                         script {
@@ -1048,7 +1048,7 @@ pipeline {
                         expression { ! skip_stage('func-test') }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label 'stage_vm9'
                     }
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
@@ -1198,7 +1198,7 @@ pipeline {
                         }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'stage_vm1'
                     }
                     steps {
                         testRpm inst_repos: el7_daos_repos(),
@@ -1216,7 +1216,7 @@ pipeline {
                         }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'stage_vm1'
                     }
                     steps {
                         testRpm inst_repos: el7_daos_repos(),
