@@ -13,7 +13,7 @@ for i in 0 1; do
             ifconfig ib$i
             cat /sys/class/net/ib$i/mode
             ifup ib$i
-          } | mail -s "Interface found down after reboot" $OPERATIONS_EMAIL
+          } | mail -s "Interface found down after reboot" "$OPERATIONS_EMAIL"
         fi
     fi
 done
