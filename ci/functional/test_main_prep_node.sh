@@ -22,6 +22,9 @@ if ! grep /mnt/share /proc/mounts; then
     mount "$FIRST_NODE":/export/share /mnt/share
 fi
 if $TEST_RPMS; then
-    # remove the install/ dir to be sure we're testing from RPMs
-    rm -rf install/
+    # remove the entire source tree (which includes the install/ dir) to
+    # be sure we're testing from RPMs
+    src_dir=$PWD
+    cd $HOME
+    rm -rf "$src_dir"
 fi
