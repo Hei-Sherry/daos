@@ -790,6 +790,9 @@ d_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
 			"will be used for backward compatibility.\n");
 	}
 
+	htable->ht_feats |= D_HASH_FT_GLOCK;
+	htable->ht_feats &= ~D_HASH_FT_NOLOCK;
+
 	D_ALLOC_ARRAY(htable->ht_buckets, nr);
 	if (htable->ht_buckets == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
