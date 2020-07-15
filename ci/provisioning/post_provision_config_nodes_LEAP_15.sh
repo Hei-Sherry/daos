@@ -60,7 +60,7 @@ post_provision_config_nodes() {
     #fi
 
     # lua-lmod can be removed on the next package image update
-    if ! zypper --non-interactive in lua-lmod $INST_RPMS; then
+    if ! zypper --non-interactive in nfs-kernel-server lua-lmod $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         for file in /etc/zypp/repos.d/*.repo; do
             echo "---- $file ----"
