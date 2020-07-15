@@ -2,13 +2,13 @@
 
 set -eux
 
-test_tag=$(git show -s --format=%%B | sed -ne "/^Test-tag%s:/s/^.*: *//p")
+test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag$PRAGMA_SUFFIX:/s/^.*: *//p")
 if [ -z "$test_tag" ]; then
     # shellcheck disable=SC2153
     test_tag=$TEST_TAG
 fi
 
-tnodes=$(echo "$NODELIST" | cut -d ',' -f 1-%d)
+tnodes=$(echo "$NODELIST" | cut -d ',' -f 1-"$NODE_COUNT")
 first_node=${NODELIST%%,*}
 
 clush -B -S -o '-i ci_key' -l root -w "${first_node}" \
