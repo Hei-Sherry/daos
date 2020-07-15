@@ -17,6 +17,7 @@ for i in 0 1; do
         fi
     fi
 done
+
 if ! grep /mnt/share /proc/mounts; then
     mkdir -p /mnt/share
     mount "$FIRST_NODE":/export/share /mnt/share
