@@ -19,6 +19,9 @@ def doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
         return true
     }
+    if (cachedCommitPragma(pragma: 'Doc-only') == 'false') {
+        return false
+    }
 
     def rc = sh label: "Determine if doc-only change",
                 script: "CHANGE_ID=${env.CHANGE_ID} " +
