@@ -26,5 +26,6 @@ if $TEST_RPMS; then
     # be sure we're testing from RPMs
     src_dir=$PWD
     cd $HOME
+    mv "$src_dir"/ci .
     rm -rf "$src_dir"
 fi
