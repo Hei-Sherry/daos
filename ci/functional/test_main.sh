@@ -12,13 +12,13 @@ tnodes=$(echo "$NODELIST" | cut -d ',' -f 1-"$NODE_COUNT")
 first_node=${NODELIST%%,*}
 
 clush -B -S -o '-i ci_key' -l root -w "${first_node}" \
-    "NODELIST=${NODELIST} $(cat functional/setup_nfs.sh)"
+    "NODELIST=${NODELIST} $(cat ci/functional/setup_nfs.sh)"
 
 clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
   "OPERATIONS_EMAIL=${OPERATIONS_EMAIL}                \
    FIRST_NODE=${first_node}                            \
    TEST_RPMS=${TEST_RPMS}                              \
-   $(cat ci/functional/test_main_prep_nodes.sh)"
+   $(cat ci/functional/test_main_prep_node.sh)"
 
 trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" "set -x; umount /mnt/share"' EXIT
 
